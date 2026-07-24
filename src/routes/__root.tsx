@@ -10,6 +10,7 @@ import {
 
 import appCss from "../styles.css?url";
 import { usePaddle } from "@/hooks/usePaddle";
+import { usePolar } from "@/hooks/usePolar";
 
 function NotFoundComponent() {
   return (
@@ -96,6 +97,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         src: "https://cdn.paddle.com/paddle/v2/paddle.js",
       },
+      {
+        src: "https://cdn.jsdelivr.net/npm/@polar-sh/checkout@0/dist/embed.global.js",
+        defer: true,
+      },
     ],
   }),
   shellComponent: RootShell,
@@ -106,11 +111,12 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: React.ReactNode }) {
   // This inline script runs synchronously before ANY paint.
-  // It immediately hides the entire page if ?_ptxn= is in the URL,
+  // It immediately hides the entire page if ?_ptxn= or ?polar_checkout= is in the URL,
   // preventing even a single frame of the website from being visible.
   const blockingScript = `
     (function(){
-      if(new URLSearchParams(location.search).get('_ptxn')){
+      var s = new URLSearchParams(location.search);
+      if(s.get('_ptxn') || s.get('polar_checkout') || s.get('checkout_id')){
         document.documentElement.style.background='#0a0a0a';
         document.documentElement.style.visibility='hidden';
       }
@@ -137,11 +143,13 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
   // Initialize Paddle globally and handle ?_ptxn= checkout links
-  const { isCheckoutMode, checkoutClosed } = usePaddle();
+  const { isCheckoutMode: isPaddleMode, checkoutClosed: paddleClosed } = usePaddle();
 
-  // When a ?_ptxn= link is opened, show a full-screen overlay immediately
-  // so the website never flashes before Paddle checkout appears
-  const showOverlay = isCheckoutMode && !checkoutClosed;
+  // Initialize Polar globally and handle ?polar_checkout= / ?checkout_id= links
+  const { isPolarCheckoutMode: isPolarMode, polarCheckoutClosed: polarClosed } = usePolar();
+
+  // When a checkout link is opened (Paddle or Polar), show full-screen overlay immediately
+  const showOverlay = (isPaddleMode && !paddleClosed) || (isPolarMode && !polarClosed);
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -167,14 +175,14 @@ function RootComponent() {
               border: "3px solid rgba(255,255,255,0.1)",
               borderTop: "3px solid #e11d48",
               borderRadius: "50%",
-              animation: "paddle-spin 0.8s linear infinite",
+              animation: "checkout-spin 0.8s linear infinite",
             }}
           />
           <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "14px", margin: 0 }}>
             Opening secure checkout…
           </p>
           <style>{`
-            @keyframes paddle-spin {
+            @keyframes checkout-spin {
               to { transform: rotate(360deg); }
             }
           `}</style>
